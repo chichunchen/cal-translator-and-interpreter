@@ -444,6 +444,7 @@ let primes_prog = "
          cp := cp + 1
      od";;
 let comp_f_prog = "sum := 1 + (2 * 3)"
+let read_write_prog = "read a read b write 1/2 do check 1 > 2 od"
 
 type parse_action = PA_error | PA_prediction of string list;;
 (* Double-index to find prediction (list of RHS symbols) for
@@ -607,8 +608,7 @@ and ast_ize_reln_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
   		-> AST_binop (">=", lhs, ast_ize_expr rhs)
   | PT_nt ("ET", [PT_nt("ro", [PT_term "<>"]); rhs])
   		-> AST_binop ("<>", lhs, ast_ize_expr rhs)
-  | PT_nt ("ET", [])
-  		-> lhs
+  | PT_nt ("ET", []) -> lhs
   | _ -> raise (Failure "malformed parse tree in ast_ize_reln_tail")
 
 and ast_ize_expr_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
@@ -641,33 +641,60 @@ and ast_ize_expr_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
    indicating their names and the lines on which the writes occur.  Your
    C program should contain code to check for dynamic semantic errors. *)
 
-(*  commented out so this code will complile
-
 let rec translate (ast:ast_sl)
-    :  string *  string
-    (* warnings  output_program *) = ...
+    :  string * string =
+	("", translate_sl ast)
 
-and translate_sl (...
+and translate_sl (ast:ast_sl) : string =
+	match ast with
+	| [] -> ""
+	| h :: t -> translate_s h ^ translate_sl t
 
-and translate_s (...
+and translate_s (s:ast_s) : string =
+	match s with
+    | AST_assign(id, expr)  -> "int " ^ id ^ " = " ^ (translate_expr expr)
+	| AST_read(id) 			-> translate_read (id)
+	| AST_write(expr) 		-> translate_write(expr)
+	| AST_if(expr, sl) 		-> "if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(sl) ^ "\n}"
+	| AST_do(sl) 			-> translate_do(sl)
+	| AST_check(rel) 		-> translate_check(rel)
+	| AST_error         	-> raise (Failure "translate_s error")
 
-and translate_assign (...
+and translate_assign (id:string) (expr:ast_e) : string =
+	"int " ^ id ^ " = " ^ (translate_expr expr)
 
-and translate_read (...
+and translate_read (id:string) : string =
+	"scanf(\"%d\", &" ^ id ^ ");\n"
 
-and translate_write (...
+and translate_write (expr:ast_e) : string =
+	"printf(\"%d\", " ^ translate_expr(expr) ^ ");\n"
+
+and translate_if (expr:ast_e) (ast:ast_sl) : string =
+	"if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(ast) ^ "\n}"
+
+and translate_do (ast:ast_sl) : string =
+	"while(1) {\n" ^ translate_sl(ast) ^ "\n}"
+
+and translate_check (expr:ast_e) : string =
+	"if (!" ^ translate_expr(expr) ^ ")"
+
+and translate_expr (expr:ast_e) : string =
+	match expr with
+	| AST_num(n) -> n
+	| AST_id(id) -> id
+	| AST_binop(op, lhs, rhs) ->
+		 "(" ^ translate_expr(lhs) ^ op ^ translate_expr(rhs) ^ ")"
+
+(*  commented out so this code will complile
 
 and translate_if (...
 
 and translate_do (...
 
-and translate_check (...
-
-and translate_expr (...
-
 *)
 
 (* test cases *)
-let t1 = parse ecg_parse_table sum_ave_prog
-let t2 = parse ecg_parse_table primes_prog
-let t3 = parse ecg_parse_table comp_f_prog
+let t1 = ast_ize_P(parse ecg_parse_table sum_ave_prog)
+let t2 = ast_ize_P(parse ecg_parse_table primes_prog)
+let t3 = ast_ize_P(parse ecg_parse_table comp_f_prog)
+let t4 = ast_ize_P(parse ecg_parse_table read_write_prog)

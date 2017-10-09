@@ -415,6 +415,7 @@ let reduce_1_prod (astack:parse_tree list) (rhs_len:int) : parse_tree list =
     | _ -> raise (Failure "expected nonterminal at top of astack") in
    helper astack rhs_len [];;
 
+
 let sum_ave_prog = "read a read b sum := a + b write sum write sum / 2";;
 let primes_prog = "
      read n
@@ -442,6 +443,7 @@ let primes_prog = "
          fi
          cp := cp + 1
      od";;
+let comp_f_prog = "sum := 1 + (2 * 3)"
 
 type parse_action = PA_error | PA_prediction of string list;;
 (* Double-index to find prediction (list of RHS symbols) for
@@ -509,11 +511,11 @@ let parse (parse_tab:parse_table) (program:string) : parse_tree =
                                ^ " when seeing " ^ tok)
             | PA_prediction(rhs) ->
                 begin
-                (*
+                 (*
                   print_string ("   predict " ^ tos ^ " ->");
                   print_string (fold_left (fun a b -> a ^ " " ^ b) "" rhs);
                   print_newline ();
-                *)
+                 *)
                   helper ((fold_left (@) [] 
                                     (map (fun s -> [PS_sym(s)]) rhs))
                               @ [PS_end(length rhs)] @ ps_tail)
@@ -549,50 +551,82 @@ and ast_e =
 | AST_num of string;;
 
 let rec ast_ize_P (p:parse_tree) : ast_sl =
-  (* your code should replace the following line *)
-  []
+  match p with
+  | PT_nt ("P", [sl; PT_term "$$"]) -> ast_ize_SL sl
+  | _ -> raise (Failure "malformed parse tree in ast_ize_SL")
 
 and ast_ize_SL (sl:parse_tree) : ast_sl =
   match sl with
   | PT_nt ("SL", []) -> []
-  (*
-     your code here ...
-  *)
+  | PT_nt ("SL", [h; t]) -> ast_ize_S h::ast_ize_SL t
   | _ -> raise (Failure "malformed parse tree in ast_ize_SL")
 
 and ast_ize_S (s:parse_tree) : ast_s =
   match s with
   | PT_nt ("S", [PT_id lhs; PT_term ":="; expr])
         -> AST_assign (lhs, (ast_ize_expr expr))
-  (*
-     your code here ...
-  *)
+  | PT_nt ("S", [PT_term "read"; PT_id id])
+        -> AST_read(id)
+  | PT_nt ("S", [PT_term "write"; expr])
+        -> AST_write(ast_ize_expr expr)
+  | PT_nt ("S", [PT_term "if"; expr; sl; PT_term "fi"])
+        -> AST_if(ast_ize_expr expr, ast_ize_SL sl)
+  | PT_nt ("S", [PT_term "do"; sl; PT_term "od"])
+        -> AST_do(ast_ize_SL sl)
+  | PT_nt ("S", [PT_term "check"; expr])
+        -> AST_check(ast_ize_expr expr)
   | _ -> raise (Failure "malformed parse tree in ast_ize_S")
 
-and ast_ize_expr (e:parse_tree) : ast_e =
+and ast_ize_expr (expr:parse_tree) : ast_e =
   (* e is an R, E, T, or F parse tree node *)
-  match e with
-  (*
-     your code here ...
-  *)
+  match expr with
+  | PT_nt ("R", [e; et]) ->
+             ast_ize_reln_tail (ast_ize_expr e) et
+  | PT_nt ("E", [t; tt]) ->
+             ast_ize_expr_tail (ast_ize_expr t) tt
+  | PT_nt ("T", [f; ft]) ->
+             ast_ize_expr_tail (ast_ize_expr f) ft
+  | PT_nt ("F", [PT_id id]) -> AST_id(id)
+  | PT_nt ("F", [PT_num num]) -> AST_num(num) 
+  | PT_nt ("F", [PT_term "("; expr; PT_term ")"]) -> ast_ize_expr(expr)
   | _ -> raise (Failure "malformed parse tree in ast_ize_expr")
 
 and ast_ize_reln_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
   (* lhs in an inheritec attribute.
      tail is an ET parse tree node *)
   match tail with
-  (*
-     your code here ...
-  *)
+  | PT_nt ("ET", [PT_nt("ro", [PT_term "=="]); rhs])
+  		-> AST_binop ("==", lhs, ast_ize_expr rhs)
+  | PT_nt ("ET", [PT_nt("ro", [PT_term "<"]); rhs])
+  		-> AST_binop ("<", lhs, ast_ize_expr rhs)
+  | PT_nt ("ET", [PT_nt("ro", [PT_term ">"]); rhs])
+  		-> AST_binop (">", lhs, ast_ize_expr rhs)
+  | PT_nt ("ET", [PT_nt("ro", [PT_term "<="]); rhs])
+  		-> AST_binop ("<=", lhs, ast_ize_expr rhs)
+  | PT_nt ("ET", [PT_nt("ro", [PT_term ">="]); rhs])
+  		-> AST_binop (">=", lhs, ast_ize_expr rhs)
+  | PT_nt ("ET", [PT_nt("ro", [PT_term "<>"]); rhs])
+  		-> AST_binop ("<>", lhs, ast_ize_expr rhs)
+  | PT_nt ("ET", [])
+  		-> lhs
   | _ -> raise (Failure "malformed parse tree in ast_ize_reln_tail")
 
 and ast_ize_expr_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
   (* lhs in an inherited attribute.
      tail is a TT or FT parse tree node *)
   match tail with
-  (*
-     your code here ...
-  *)
+  | PT_nt ("TT", [PT_nt ("ao", [PT_term "+"]); t; tt]) ->
+        ast_ize_expr_tail (AST_binop ("+", lhs, ast_ize_expr t)) tt
+  | PT_nt ("TT", [PT_nt ("ao", [PT_term "-"]); t; tt]) ->
+        ast_ize_expr_tail (AST_binop ("-", lhs, ast_ize_expr t)) tt
+  | PT_nt ("FT", [PT_nt ("mo", [PT_term "/"]); f; ft]) ->
+        ast_ize_expr_tail (AST_binop ("/", lhs, ast_ize_expr f)) ft
+  | PT_nt ("FT", [PT_nt ("mo", [PT_term "*"]); f; ft]) ->
+        ast_ize_expr_tail (AST_binop ("*", lhs, ast_ize_expr f)) ft
+  | PT_nt ("TT", []) -> lhs
+  | PT_nt ("FT", []) -> lhs
+  | PT_nt ("TT", _) -> raise (Failure "TT doesn't work")
+  | PT_nt ("FT", _) -> raise (Failure "FT doesn't work")
   | _ -> raise (Failure "malformed parse tree in ast_ize_expr_tail")
 ;;
 
@@ -632,3 +666,8 @@ and translate_check (...
 and translate_expr (...
 
 *)
+
+(* test cases *)
+let t1 = parse ecg_parse_table sum_ave_prog
+let t2 = parse ecg_parse_table primes_prog
+let t3 = parse ecg_parse_table comp_f_prog

@@ -643,7 +643,18 @@ and ast_ize_expr_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
 
 let rec translate (ast:ast_sl)
     :  string * string =
-	("", translate_sl ast)
+    let preface = "
+#include <stdio.h>
+#include <stdlib.h>
+int getint() {
+    int n;
+    scanf(\"%d\", &n);
+    return n;
+}
+void putint(int n) {
+    printf(\"%d\\n\", n);
+}
+" in ("", preface ^ translate_sl ast)
 
 and translate_sl (ast:ast_sl) : string =
 	match ast with
@@ -652,31 +663,31 @@ and translate_sl (ast:ast_sl) : string =
 
 and translate_s (s:ast_s) : string =
 	match s with
-    | AST_assign(id, expr)  -> "int " ^ id ^ " = " ^ (translate_expr expr)
+    | AST_assign(id, expr)  -> "int " ^ id ^ " = " ^ (translate_expr expr) ^ ";\n"
 	| AST_read(id) 			-> translate_read (id)
 	| AST_write(expr) 		-> translate_write(expr)
-	| AST_if(expr, sl) 		-> "if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(sl) ^ "\n}"
+	| AST_if(expr, sl) 		-> "if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(sl) ^ "}\n"
 	| AST_do(sl) 			-> translate_do(sl)
 	| AST_check(rel) 		-> translate_check(rel)
 	| AST_error         	-> raise (Failure "translate_s error")
 
 and translate_assign (id:string) (expr:ast_e) : string =
-	"int " ^ id ^ " = " ^ (translate_expr expr)
+	"int " ^ id ^ " = " ^ (translate_expr expr) ^ "\n"
 
 and translate_read (id:string) : string =
-	"scanf(\"%d\", &" ^ id ^ ");\n"
+    id ^ " = getint();\n"
 
 and translate_write (expr:ast_e) : string =
-	"printf(\"%d\", " ^ translate_expr(expr) ^ ");\n"
+	"putint(" ^ translate_expr(expr) ^ ");\n"
 
 and translate_if (expr:ast_e) (ast:ast_sl) : string =
-	"if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(ast) ^ "\n}"
+	"if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(ast) ^ "}"
 
 and translate_do (ast:ast_sl) : string =
-	"while(1) {\n" ^ translate_sl(ast) ^ "\n}"
+	"while(1) {\n" ^ translate_sl(ast) ^ "}\n"
 
 and translate_check (expr:ast_e) : string =
-	"if (!" ^ translate_expr(expr) ^ ")"
+	"if (!" ^ translate_expr(expr) ^ ") break;\n"
 
 and translate_expr (expr:ast_e) : string =
 	match expr with
@@ -696,5 +707,6 @@ and translate_do (...
 (* test cases *)
 let t1 = ast_ize_P(parse ecg_parse_table sum_ave_prog)
 let t2 = ast_ize_P(parse ecg_parse_table primes_prog)
+(* print_string (snd (translate t2));; *)
 let t3 = ast_ize_P(parse ecg_parse_table comp_f_prog)
 let t4 = ast_ize_P(parse ecg_parse_table read_write_prog)

@@ -641,9 +641,21 @@ and ast_ize_expr_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
    indicating their names and the lines on which the writes occur.  Your
    C program should contain code to check for dynamic semantic errors. *)
 
-let rec translate (ast:ast_sl)
-    :  string * string =
-    let preface = "
+let remove_elt e l =
+    let rec go l acc = match l with
+    | [] -> List.rev acc
+    | x::xs when e = x -> go xs acc
+    | x::xs -> go xs (x::acc)
+    in go l []
+
+let remove_duplicates l =
+  let rec go l acc = match l with
+  | [] -> List.rev acc
+  | x :: xs -> go (remove_elt x xs) (x::acc)
+  in go l []
+
+let code_gen_preface =
+"
 #include <stdio.h>
 #include <stdlib.h>
 int getint() {
@@ -654,7 +666,34 @@ int getint() {
 void putint(int n) {
     printf(\"%d\\n\", n);
 }
-" in ("", preface ^ translate_sl ast)
+int main() {
+"
+
+let rec translate (ast:ast_sl)
+    :  string * string =
+    let rec traverse_variables (ast:ast_sl) : string list =
+        match ast with
+        | [] -> []
+        | h :: t ->
+            match h with
+            | AST_assign (id, expr)  ->
+                id::traverse_variables t
+            | AST_read (id)          ->
+                id::traverse_variables t
+            | AST_do (sl)            ->
+                traverse_variables sl @ traverse_variables t
+            | AST_if (expr, sl)      ->
+                traverse_variables sl @ traverse_variables t
+            | AST_write (expr)       
+            | AST_check (expr)       -> traverse_variables t
+	        | AST_error         	-> raise (Failure "traverse_variables error")
+    in
+    let rec variables_string = function 
+        [] -> ""
+        | h::t -> "int " ^ h ^ ";\n" ^ variables_string t
+    in
+    let var_list = remove_duplicates(traverse_variables ast) in
+    ("", code_gen_preface ^ variables_string var_list ^ translate_sl ast ^ "return 0;\n}")
 
 and translate_sl (ast:ast_sl) : string =
 	match ast with
@@ -663,7 +702,7 @@ and translate_sl (ast:ast_sl) : string =
 
 and translate_s (s:ast_s) : string =
 	match s with
-    | AST_assign(id, expr)  -> "int " ^ id ^ " = " ^ (translate_expr expr) ^ ";\n"
+    | AST_assign(id, expr)  -> id ^ " = " ^ (translate_expr expr) ^ ";\n"
 	| AST_read(id) 			-> translate_read (id)
 	| AST_write(expr) 		-> translate_write(expr)
 	| AST_if(expr, sl) 		-> "if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(sl) ^ "}\n"
@@ -672,7 +711,7 @@ and translate_s (s:ast_s) : string =
 	| AST_error         	-> raise (Failure "translate_s error")
 
 and translate_assign (id:string) (expr:ast_e) : string =
-	"int " ^ id ^ " = " ^ (translate_expr expr) ^ "\n"
+	id ^ " = " ^ (translate_expr expr) ^ ";\n"
 
 and translate_read (id:string) : string =
     id ^ " = getint();\n"
@@ -681,7 +720,7 @@ and translate_write (expr:ast_e) : string =
 	"putint(" ^ translate_expr(expr) ^ ");\n"
 
 and translate_if (expr:ast_e) (ast:ast_sl) : string =
-	"if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(ast) ^ "}"
+	"if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(ast) ^ "}\n"
 
 and translate_do (ast:ast_sl) : string =
 	"while(1) {\n" ^ translate_sl(ast) ^ "}\n"
@@ -696,17 +735,14 @@ and translate_expr (expr:ast_e) : string =
 	| AST_binop(op, lhs, rhs) ->
 		 "(" ^ translate_expr(lhs) ^ op ^ translate_expr(rhs) ^ ")"
 
-(*  commented out so this code will complile
-
-and translate_if (...
-
-and translate_do (...
-
-*)
-
 (* test cases *)
+(*
 let t1 = ast_ize_P(parse ecg_parse_table sum_ave_prog)
-let t2 = ast_ize_P(parse ecg_parse_table primes_prog)
-(* print_string (snd (translate t2));; *)
+let p1 = print_string (snd (translate t1))
 let t3 = ast_ize_P(parse ecg_parse_table comp_f_prog)
+let p3 = print_string (snd (translate t3))
 let t4 = ast_ize_P(parse ecg_parse_table read_write_prog)
+let p4 = print_string (snd (translate t4))
+*)
+let t2 = ast_ize_P(parse ecg_parse_table primes_prog)
+let p2 = print_string (snd (translate t2))

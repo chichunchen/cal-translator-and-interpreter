@@ -444,7 +444,7 @@ let primes_prog = "
          cp := cp + 1
      od";;
 let comp_f_prog = "sum := 1 + (2 * 3)"
-let read_write_prog = "read a read b write 1+2+3"
+let read_write_prog = "read a read b s := 1+2 write a+b+s"
 
 type parse_action = PA_error | PA_prediction of string list;;
 (* Double-index to find prediction (list of RHS symbols) for
@@ -760,24 +760,40 @@ type memory = (string * int) list
 type status = Good | Bad | Done
 
 let rec interpret (ast:ast_sl) (stdin:string) : string list =
-    let (_, _, _, outp) = interpret_sl ast [] ["1";"2"] [] in outp
+    let rec print_mem mem_list =
+        match mem_list with
+        | [] -> ()
+        | (id, value) :: t -> print_string (id);
+                              print_string (" ");
+                              print_int (value);
+                              print_string ("\n");
+                              print_mem t in
+    let (_, mem, _, outp) = interpret_sl ast [] ["1";"2"] [] in
+        print_mem (rev mem);
+        outp
 
 and interpret_sl (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
     : status * memory * string list * string list =
     (*                  input         output *)
     match sl with
     | [] -> (Good, mem, input, output)
-    | h::t -> let (stat, mm, n_input, n_output) = interpret_s h mem input output in
+    | h::t -> let (stat, n_mem, n_input, n_output) = interpret_s h mem input output in
         match stat with
-        | Good -> interpret_sl t mm n_input n_output
+        | Good -> interpret_sl t n_mem n_input n_output
         | _ -> (Bad, mem, input, output)
 
 and interpret_s (s:ast_s) (mem:memory) (inp:string list) (outp:string list)
     : status * memory * string list * string list =
 	match s with
+    | AST_assign(id, expr)  -> interpret_assign id expr mem inp outp
 	| AST_read(id) 			-> interpret_read id mem inp outp
 	| AST_write(expr) 		-> interpret_write expr mem inp outp
 	| _                  	-> raise (Failure "interpret_s error")
+
+and interpret_assign (id:string) (expr:ast_e) (mem:memory) (input:string list) (output:string list)
+    : status * memory * string list * string list =
+    let (result, _) = interpret_expr expr mem in
+    (Good, (id, result) :: mem, input, output)
 
 (* add a (id, value) pair into memory if succeed *)
 and interpret_read (id:string) (mem:memory) (input:string list) (output:string list)
@@ -795,10 +811,16 @@ and interpret_write (expr:ast_e) (mem:memory) (input:string list) (output:string
     (Good, mem, input, output)
 
 and interpret_expr (expr:ast_e) (mem:memory) : int * memory =
+    (* return the value of id from the memory which is an integer *)
+    let rec find_val id mem_list =
+        match mem_list with
+        | [] -> raise (Failure "id not declared")
+        | (target, value) :: t ->
+            if id = target then value else find_val id t in
     match expr with
 	| AST_num(n) -> (int_of_string n, mem)
     (* should check whether there is a id in memory *)
-	| AST_id(id) -> (int_of_string id, mem)
+	| AST_id(id) -> (find_val id mem, mem)
 	| AST_binop(op, lhs, rhs) ->
         let (left, _) = interpret_expr lhs mem in
         let (right, _) = interpret_expr rhs mem in

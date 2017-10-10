@@ -1,4 +1,14 @@
-A3 Translator
+# A3 Translator
+
+### TODO
+- [ ] unexpected end of input (attempt to read when there’s nothing there)
+- [ ] non-numeric input (the extended calculator language accepts only integers)
+- [ ] use of an uninitialized variable—one to which a value has not yet been assigned (read-ing counts as assignment). 
+- [ ] divide by zero (C's automatically generated “floating exception” is not helpful:
+    you want something like “divide by zero at line 23”).
+- [ ] interpret
+
+### Output sample
 
 ```
 #include <stdio.h>

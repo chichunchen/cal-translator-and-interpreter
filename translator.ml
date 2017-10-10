@@ -444,7 +444,7 @@ let primes_prog = "
          cp := cp + 1
      od";;
 let comp_f_prog = "sum := 1 + (2 * 3)"
-let read_write_prog = "read a read b s := 1+2 write a+b+s"
+let read_write_prog = "read a read b s := 1+2 if 1-1 write a+b+s fi"
 
 type parse_action = PA_error | PA_prediction of string list;;
 (* Double-index to find prediction (list of RHS symbols) for
@@ -754,8 +754,8 @@ type memory = (string * int) list
 
 (*
     Good:  continue
-    Bad:   runtime error
-    Done:  finish
+    Bad:   runtime error (stop)
+    Done:  finish (use in if)
 *)
 type status = Good | Bad | Done
 
@@ -788,6 +788,7 @@ and interpret_s (s:ast_s) (mem:memory) (inp:string list) (outp:string list)
     | AST_assign(id, expr)  -> interpret_assign id expr mem inp outp
 	| AST_read(id) 			-> interpret_read id mem inp outp
 	| AST_write(expr) 		-> interpret_write expr mem inp outp
+    | AST_if(expr, sl)      -> interpret_if expr sl mem inp outp
 	| _                  	-> raise (Failure "interpret_s error")
 
 and interpret_assign (id:string) (expr:ast_e) (mem:memory) (input:string list) (output:string list)
@@ -809,6 +810,13 @@ and interpret_write (expr:ast_e) (mem:memory) (input:string list) (output:string
     let (ret, _) = interpret_expr expr mem in
     print_int (ret); print_string("\n");
     (Good, mem, input, output)
+
+and interpret_if (expr:ast_e) (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
+    : status * memory * string list * string list =
+    let (ret, _) = interpret_expr expr mem in
+    match ret with
+    | 0 -> (Good, mem, input, output)
+    | _ -> interpret_sl sl mem input output
 
 and interpret_expr (expr:ast_e) (mem:memory) : int * memory =
     (* return the value of id from the memory which is an integer *)

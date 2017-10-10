@@ -444,7 +444,7 @@ let primes_prog = "
          cp := cp + 1
      od";;
 let comp_f_prog = "sum := 1 + (2 * 3)"
-let read_write_prog = "read a read b write 1/2 do check 1 > 2 od"
+let read_write_prog = "read a read b write 1+2+3"
 
 type parse_action = PA_error | PA_prediction of string list;;
 (* Double-index to find prediction (list of RHS symbols) for
@@ -643,14 +643,14 @@ and ast_ize_expr_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
 
 let remove_elt e l =
     let rec go l acc = match l with
-    | [] -> List.rev acc
+    | [] -> rev acc
     | x::xs when e = x -> go xs acc
     | x::xs -> go xs (x::acc)
     in go l []
 
 let remove_duplicates l =
   let rec go l acc = match l with
-  | [] -> List.rev acc
+  | [] -> rev acc
   | x :: xs -> go (remove_elt x xs) (x::acc)
   in go l []
 
@@ -686,7 +686,7 @@ let rec translate (ast:ast_sl)
                 traverse_variables sl @ traverse_variables t
             | AST_write (expr)       
             | AST_check (expr)       -> traverse_variables t
-	        | AST_error         	-> raise (Failure "traverse_variables error")
+	        | AST_error         	 -> raise (Failure "traverse_variables error")
     in
     let rec variables_string = function 
         [] -> ""
@@ -702,12 +702,12 @@ and translate_sl (ast:ast_sl) : string =
 
 and translate_s (s:ast_s) : string =
 	match s with
-    | AST_assign(id, expr)  -> id ^ " = " ^ (translate_expr expr) ^ ";\n"
-	| AST_read(id) 			-> translate_read (id)
-	| AST_write(expr) 		-> translate_write(expr)
-	| AST_if(expr, sl) 		-> "if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(sl) ^ "}\n"
-	| AST_do(sl) 			-> translate_do(sl)
-	| AST_check(rel) 		-> translate_check(rel)
+    | AST_assign(id, expr)  -> translate_assign id expr
+	| AST_read(id) 			-> translate_read id
+	| AST_write(expr) 		-> translate_write expr
+	| AST_if(expr, sl) 		-> translate_if expr sl
+	| AST_do(sl) 			-> translate_do sl
+	| AST_check(rel) 		-> translate_check rel
 	| AST_error         	-> raise (Failure "translate_s error")
 
 and translate_assign (id:string) (expr:ast_e) : string =
@@ -719,8 +719,8 @@ and translate_read (id:string) : string =
 and translate_write (expr:ast_e) : string =
 	"putint(" ^ translate_expr(expr) ^ ");\n"
 
-and translate_if (expr:ast_e) (ast:ast_sl) : string =
-	"if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(ast) ^ "}\n"
+and translate_if (expr:ast_e) (sl:ast_sl) : string =
+    "if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(sl) ^ "}\n"
 
 and translate_do (ast:ast_sl) : string =
 	"while(1) {\n" ^ translate_sl(ast) ^ "}\n"
@@ -736,13 +736,12 @@ and translate_expr (expr:ast_e) : string =
 		 "(" ^ translate_expr(lhs) ^ op ^ translate_expr(rhs) ^ ")"
 
 (* test cases *)
-(*
 let t1 = ast_ize_P(parse ecg_parse_table sum_ave_prog)
 let p1 = print_string (snd (translate t1))
 let t3 = ast_ize_P(parse ecg_parse_table comp_f_prog)
 let p3 = print_string (snd (translate t3))
 let t4 = ast_ize_P(parse ecg_parse_table read_write_prog)
 let p4 = print_string (snd (translate t4))
-*)
 let t2 = ast_ize_P(parse ecg_parse_table primes_prog)
 let p2 = print_string (snd (translate t2))
+let (warning, c_prog) = translate t2

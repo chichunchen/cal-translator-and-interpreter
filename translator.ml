@@ -745,3 +745,68 @@ let p4 = print_string (snd (translate t4))
 let t2 = ast_ize_P(parse ecg_parse_table primes_prog)
 let p2 = print_string (snd (translate t2))
 let (warning, c_prog) = translate t2
+
+(*******************************************************************
+    Interpret the program using AST directly
+ *******************************************************************)
+
+type memory = (string * int) list
+
+(*
+    Good:  continue
+    Bad:   runtime error
+    Done:  finish
+*)
+type status = Good | Bad | Done
+
+let rec interpret (ast:ast_sl) (stdin:string) : string list =
+    let (_, _, _, outp) = interpret_sl ast [] ["1";"2"] [] in outp
+
+and interpret_sl (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
+    : status * memory * string list * string list =
+    (*                  input         output *)
+    match sl with
+    | [] -> (Good, mem, input, output)
+    | h::t -> let (stat, mm, n_input, n_output) = interpret_s h mem input output in
+        match stat with
+        | Good -> interpret_sl t mm n_input n_output
+        | _ -> (Bad, mem, input, output)
+
+and interpret_s (s:ast_s) (mem:memory) (inp:string list) (outp:string list)
+    : status * memory * string list * string list =
+	match s with
+	| AST_read(id) 			-> interpret_read id mem inp outp
+	| AST_write(expr) 		-> interpret_write expr mem inp outp
+	| _                  	-> raise (Failure "interpret_s error")
+
+(* add a (id, value) pair into memory if succeed *)
+and interpret_read (id:string) (mem:memory) (input:string list) (output:string list)
+    : status * memory * string list * string list =
+    match input with
+    | []     -> print_string "no input in read";
+                (Bad, mem, input, output)
+    | h :: t -> print_string ("read " ^ id ^ " " ^ h ^ "\n");
+                (Good, (id, (int_of_string h)) :: mem, t, output)
+
+and interpret_write (expr:ast_e) (mem:memory) (input:string list) (output:string list)
+    : status * memory * string list * string list =
+    let (ret, _) = interpret_expr expr mem in
+    print_int (ret); print_string("\n");
+    (Good, mem, input, output)
+
+and interpret_expr (expr:ast_e) (mem:memory) : int * memory =
+    match expr with
+	| AST_num(n) -> (int_of_string n, mem)
+    (* should check whether there is a id in memory *)
+	| AST_id(id) -> (int_of_string id, mem)
+	| AST_binop(op, lhs, rhs) ->
+        let (left, _) = interpret_expr lhs mem in
+        let (right, _) = interpret_expr rhs mem in
+        match op with
+        | "+" -> (left + right, mem)
+        | "-" -> (left - right, mem)
+        | "*" -> (left * right, mem)
+        | "/" -> (left / right, mem)
+
+let t4 = ast_ize_P(parse ecg_parse_table read_write_prog)
+let a = interpret t4 ""

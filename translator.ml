@@ -664,7 +664,13 @@ let code_gen_preface =
 #include <stdlib.h>
 int getint() {
     int n;
-    scanf(\"%d\", &n);
+    char buf[100];
+    fgets(buf, sizeof(buf), stdin);
+    if (sscanf(buf, \"%d\", &n) != 1) {
+       if (buf[0] == '\\n') printf(\"Error: No input.\");
+       else printf(\"Error: Input not integer.\");
+       exit(0);
+    }
     return n;
 }
 void putint(int n) {

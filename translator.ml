@@ -28,6 +28,8 @@ open Str;;      (* for split *)
         ocamlc str.cma interpreter.ml
 *)
 
+#load "str.cma";;
+
 (* Surprisingly, compose isn't built in.  It's included in various
    widely used commercial packages, but not in the core libraries. *)
 let compose f g x = f (g x);;
@@ -643,11 +645,11 @@ and ast_ize_expr_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
    C program should contain code to check for dynamic semantic errors. *)
 
 let remove_elt e l =
-    let rec go l acc = match l with
-    | [] -> rev acc
-    | x::xs when e = x -> go xs acc
-    | x::xs -> go xs (x::acc)
-    in go l []
+  let rec go l acc = match l with
+  | [] -> rev acc
+  | x::xs when e = x -> go xs acc
+  | x::xs -> go xs (x::acc)
+  in go l []
 
 let remove_duplicates l =
   let rec go l acc = match l with
@@ -671,68 +673,68 @@ int main() {
 "
 
 let rec translate (ast:ast_sl)
-    :  string * string =
-    let rec traverse_variables (ast:ast_sl) : string list =
-        match ast with
-        | [] -> []
-        | h :: t ->
-            match h with
-            | AST_assign (id, expr)  -> id::traverse_variables t
-            | AST_read (id)          -> id::traverse_variables t
-            | AST_do (sl)            ->
-                traverse_variables sl @ traverse_variables t
-            | AST_if (expr, sl)      ->
-                traverse_variables sl @ traverse_variables t
-            | AST_write (expr)       
-            | AST_check (expr)       -> traverse_variables t
-            | AST_error              -> raise (Failure "traverse_variables error")
-    in
-    let rec variables_string = function 
-        [] -> ""
-        | h::t -> "int " ^ h ^ ";\n" ^ variables_string t
-    in
-    let var_list = remove_duplicates(traverse_variables ast) in
-    ("", code_gen_preface ^ variables_string var_list ^ translate_sl ast ^ "return 0;\n}")
+  :  string * string =
+  let rec traverse_variables (ast:ast_sl) : string list =
+    match ast with
+    | [] -> []
+    | h :: t ->
+      match h with
+      | AST_assign (id, expr)  -> id::traverse_variables t
+      | AST_read (id)          -> id::traverse_variables t
+      | AST_do (sl)            ->
+          traverse_variables sl @ traverse_variables t
+      | AST_if (expr, sl)      ->
+          traverse_variables sl @ traverse_variables t
+      | AST_write (expr)       
+      | AST_check (expr)       -> traverse_variables t
+      | AST_error              -> raise (Failure "traverse_variables error")
+  in
+  let rec variables_string = function 
+    [] -> ""
+    | h::t -> "int " ^ h ^ ";\n" ^ variables_string t
+  in
+  let var_list = remove_duplicates(traverse_variables ast) in
+  ("", code_gen_preface ^ variables_string var_list ^ translate_sl ast ^ "return 0;\n}")
 
 and translate_sl (ast:ast_sl) : string =
-    match ast with
-    | [] -> ""
-    | h :: t -> translate_s h ^ translate_sl t
+  match ast with
+  | [] -> ""
+  | h :: t -> translate_s h ^ translate_sl t
 
 and translate_s (s:ast_s) : string =
-    match s with
-    | AST_assign(id, expr)  -> translate_assign id expr
-    | AST_read(id)          -> translate_read id
-    | AST_write(expr)       -> translate_write expr
-    | AST_if(expr, sl)      -> translate_if expr sl
-    | AST_do(sl)            -> translate_do sl
-    | AST_check(rel)        -> translate_check rel
-    | AST_error             -> raise (Failure "translate_s error")
+  match s with
+  | AST_assign(id, expr)  -> translate_assign id expr
+  | AST_read(id)          -> translate_read id
+  | AST_write(expr)       -> translate_write expr
+  | AST_if(expr, sl)      -> translate_if expr sl
+  | AST_do(sl)            -> translate_do sl
+  | AST_check(rel)        -> translate_check rel
+  | AST_error             -> raise (Failure "translate_s error")
 
 and translate_assign (id:string) (expr:ast_e) : string =
-    id ^ " = " ^ (translate_expr expr) ^ ";\n"
+  id ^ " = " ^ (translate_expr expr) ^ ";\n"
 
 and translate_read (id:string) : string =
-    id ^ " = getint();\n"
+  id ^ " = getint();\n"
 
 and translate_write (expr:ast_e) : string =
-    "putint(" ^ translate_expr(expr) ^ ");\n"
+  "putint(" ^ translate_expr(expr) ^ ");\n"
 
 and translate_if (expr:ast_e) (sl:ast_sl) : string =
-    "if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(sl) ^ "}\n"
+  "if (" ^ translate_expr(expr) ^ ") {\n" ^ translate_sl(sl) ^ "}\n"
 
 and translate_do (ast:ast_sl) : string =
-    "while(1) {\n" ^ translate_sl(ast) ^ "}\n"
+  "while(1) {\n" ^ translate_sl(ast) ^ "}\n"
 
 and translate_check (expr:ast_e) : string =
-    "if (!" ^ translate_expr(expr) ^ ") break;\n"
+  "if (!" ^ translate_expr(expr) ^ ") break;\n"
 
 and translate_expr (expr:ast_e) : string =
-    match expr with
-    | AST_num(n) -> n
-    | AST_id(id) -> id
-    | AST_binop(op, lhs, rhs) ->
-         "(" ^ translate_expr(lhs) ^ op ^ translate_expr(rhs) ^ ")"
+  match expr with
+  | AST_num(n) -> n
+  | AST_id(id) -> id
+  | AST_binop(op, lhs, rhs) ->
+  "(" ^ translate_expr(lhs) ^ op ^ translate_expr(rhs) ^ ")"
 
 (* test cases *)
 let t1 = ast_ize_P(parse ecg_parse_table sum_ave_prog)
@@ -759,120 +761,124 @@ type memory = (string * int) list
 type status = Good | Bad | Done
 
 let rec interpret (ast:ast_sl) (stdin:string) : string list =
-    (* for debug *)
-    let print_var_list mem_list =
-        print_string "--- variable lists start ---\n";
-        let rec aux m_list =
-            match m_list with
-            | [] -> ()
-            | (id, value) :: t -> print_string (id); print_string (" ");
-                                  print_int (value); print_string ("\n");
-                                  aux t
-        in aux mem_list;
-        print_string "--- variable lists end ---\n";
-    in
-    let (_, mem, _, outp) = interpret_sl ast [] ["10";"2"] [] in
-        print_var_list (rev mem);
-        outp
+  (* for debug *)
+  let print_var_list mem_list =
+    print_string "--- variable lists start ---\n";
+    let rec aux m_list =
+      match m_list with
+      | [] -> ()
+      | (id, value) :: t -> print_string (id); print_string (" ");
+                            print_int (value); print_string ("\n");
+                            aux t
+      in aux mem_list;
+      print_string "--- variable lists end ---\n"; in
+  let convert_stdin str =
+    split (regexp " \n\t") str in
+  let (_, mem, _, outp) =
+    interpret_sl ast [] (convert_stdin stdin) [] in
+    print_var_list (rev mem);
+    outp
 
 and interpret_sl (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
-    : status * memory * string list * string list =
-    (*                  input         output *)
-    match sl with
-    | [] -> (Good, mem, input, output)
-    | h::t -> let (stat, n_mem, n_input, n_output) = interpret_s h mem input output in
-        match stat with
-        | Good -> interpret_sl t n_mem n_input n_output
-        | Done -> (Done, mem, input, output)
-        | _    -> (Bad, mem, input, output)
+  : status * memory * string list * string list =
+  (*                  input         output *)
+  match sl with
+  | [] -> (Good, mem, input, output)
+  | h::t -> let (stat, n_mem, n_input, n_output) = interpret_s h mem input output in
+    match stat with
+    | Good -> interpret_sl t n_mem n_input n_output
+    | Done -> (Done, mem, input, output)
+    | _    -> (Bad, mem, input, output)
 
 and interpret_s (s:ast_s) (mem:memory) (inp:string list) (outp:string list)
-    : status * memory * string list * string list =
-    match s with
-    | AST_assign(id, expr)  -> interpret_assign id expr mem inp outp
-    | AST_read(id)          -> interpret_read id mem inp outp
-    | AST_write(expr)       -> interpret_write expr mem inp outp
-    | AST_if(expr, sl)      -> interpret_if expr sl mem inp outp
-    | AST_do(sl)            -> interpret_do sl mem inp outp
-    | AST_check(expr)       -> interpret_check expr mem inp outp
-    | _                     -> raise (Failure "interpret_s error")
+  : status * memory * string list * string list =
+  match s with
+  | AST_assign(id, expr)  -> interpret_assign id expr mem inp outp
+  | AST_read(id)          -> interpret_read id mem inp outp
+  | AST_write(expr)       -> interpret_write expr mem inp outp
+  | AST_if(expr, sl)      -> interpret_if expr sl mem inp outp
+  | AST_do(sl)            -> interpret_do sl mem inp outp
+  | AST_check(expr)       -> interpret_check expr mem inp outp
+  | _                     -> raise (Failure "interpret_s error")
 
 and interpret_assign (id:string) (expr:ast_e) (mem:memory) (input:string list) (output:string list)
-    : status * memory * string list * string list =
-    let drop_target target mem_list =
-      let rec aux target mem_list =
-        match mem_list with
-        | []     -> []
-        | h :: t -> if fst h = target then aux target t
-                    else h :: (aux target t)
-        in aux target mem_list
-    in
-    let (result, _) = interpret_expr expr mem in
-    let new_mem = drop_target id mem in
-    (Good, (id, result) :: new_mem, input, output)
+  : status * memory * string list * string list =
+  let drop_target target mem_list =
+    let rec aux target mem_list =
+      match mem_list with
+      | []     -> []
+      | h :: t -> if fst h = target then aux target t
+                  else h :: (aux target t)
+      in aux target mem_list
+  in
+  let (result, _) = interpret_expr expr mem in
+  let new_mem = drop_target id mem in
+  (Good, (id, result) :: new_mem, input, output)
 
 (* add a (id, value) pair into memory if succeed *)
 and interpret_read (id:string) (mem:memory) (input:string list) (output:string list)
-    : status * memory * string list * string list =
-    match input with
-    | []     -> print_string "no input in read";
-                (Bad, mem, input, output)
-    | h :: t -> print_string ("read " ^ id ^ " " ^ h ^ "\n");
-                (Good, (id, (int_of_string h)) :: mem, t, output)
+  : status * memory * string list * string list =
+  match input with
+  | []     ->
+    print_string "no input in read";
+    (Bad, mem, input, output)
+  | h :: t ->
+    print_string ("read " ^ id ^ " " ^ h ^ "\n");
+    (Good, (id, (int_of_string h)) :: mem, t, output)
 
 and interpret_write (expr:ast_e) (mem:memory) (input:string list) (output:string list)
-    : status * memory * string list * string list =
-    let (ret, _) = interpret_expr expr mem in
-    print_int (ret); print_string("\n");
-    (Good, mem, input, output)
+  : status * memory * string list * string list =
+  let (ret, _) = interpret_expr expr mem in
+  print_int (ret); print_string("\n");
+  (Good, mem, input, output)
 
 and interpret_if (expr:ast_e) (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
-    : status * memory * string list * string list =
-    let (ret, _) = interpret_expr expr mem in
-    match ret with
-    | 0 -> (Good, mem, input, output)
-    | _ -> interpret_sl sl mem input output
+  : status * memory * string list * string list =
+  let (ret, _) = interpret_expr expr mem in
+  match ret with
+  | 0 -> (Good, mem, input, output)
+  | _ -> interpret_sl sl mem input output
 
 and interpret_do (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
-    : status * memory * string list * string list =
-    let (n_status, n_mem, n_input, n_output) = interpret_sl sl mem input output in
-    match n_status with
-    | Good -> interpret_do sl n_mem n_input n_output
-    | Done -> (Good, mem ,input, output)
-    | Bad  -> (Bad, mem, input, output)
+  : status * memory * string list * string list =
+  let (n_status, n_mem, n_input, n_output) = interpret_sl sl mem input output in
+  match n_status with
+  | Good -> interpret_do sl n_mem n_input n_output
+  | Done -> (Good, mem ,input, output)
+  | Bad  -> (Bad, mem, input, output)
 
 and interpret_check (expr:ast_e) (mem:memory) (input:string list) (output:string list)
-    : status * memory * string list * string list =
-    let (ret, _) = interpret_expr expr mem in
-    match ret with
-    | 0 -> (Done, mem, input, output)
-    | _ -> (Good, mem, input, output)
+  : status * memory * string list * string list =
+  let (ret, _) = interpret_expr expr mem in
+  match ret with
+  | 0 -> (Done, mem, input, output)
+  | _ -> (Good, mem, input, output)
 
 and interpret_expr (expr:ast_e) (mem:memory) : int * memory =
     (* return the value of id from the memory which is an integer *)
-    let rec find_val id mem_list =
-        match mem_list with
-        | [] -> raise (Failure "variable not yet declared")
-        | (target, value) :: t ->
-            if id = target then value else find_val id t in
-    match expr with
-    | AST_num(n) -> (int_of_string n, mem)
-    | AST_id(id) -> (find_val id mem, mem)
-    | AST_binop(op, lhs, rhs) ->
-        let (left, _) = interpret_expr lhs mem in
-        let (right, _) = interpret_expr rhs mem in
-        match op with
-        | "+" -> (left + right, mem)
-        | "-" -> (left - right, mem)
-        | "*" -> (left * right, mem)
-        | "/" -> (left / right, mem)
-        | ">" -> if left > right then (1, mem) else (0, mem)
-        | "<" -> if left < right then (1, mem) else (0, mem)
-        | ">=" -> if left >= right then (1, mem) else (0, mem)
-        | "<=" -> if left <= right then (1, mem) else (0, mem)
-        | "==" -> if left = right then (1, mem) else (0, mem)
-        | "<>" -> if left <> right then (1, mem) else (0, mem)
-        | _   -> raise (Failure "interpret_expr: no such operator")
+  let rec find_val id mem_list =
+    match mem_list with
+    | [] -> raise (Failure "variable not yet declared")
+    | (target, value) :: t ->
+      if id = target then value else find_val id t in
+  match expr with
+  | AST_num(n) -> (int_of_string n, mem)
+  | AST_id(id) -> (find_val id mem, mem)
+  | AST_binop(op, lhs, rhs) ->
+    let (left, _) = interpret_expr lhs mem in
+    let (right, _) = interpret_expr rhs mem in
+    match op with
+    | "+" -> (left + right, mem)
+    | "-" -> (left - right, mem)
+    | "*" -> (left * right, mem)
+    | "/" -> (left / right, mem)
+    | ">" -> if left > right then (1, mem) else (0, mem)
+    | "<" -> if left < right then (1, mem) else (0, mem)
+    | ">=" -> if left >= right then (1, mem) else (0, mem)
+    | "<=" -> if left <= right then (1, mem) else (0, mem)
+    | "==" -> if left = right then (1, mem) else (0, mem)
+    | "<>" -> if left <> right then (1, mem) else (0, mem)
+    | _   -> raise (Failure "interpret_expr: no such operator")
 
 let t4 = ast_ize_P(parse ecg_parse_table read_write_prog)
 let a = interpret t4 ""
@@ -881,6 +887,6 @@ let c = interpret t1 ""
 let t3 = ast_ize_P(parse ecg_parse_table comp_f_prog)
 let d = interpret t3 ""
 let t5 = ast_ize_P(parse ecg_parse_table do_check_prog)
-let b = interpret t5 ""
+let b = interpret t5 "10"
 let t2 = ast_ize_P(parse ecg_parse_table primes_prog)
-let e = interpret t2 ""
+let e = interpret t2 "10"

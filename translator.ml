@@ -763,8 +763,9 @@ type status = Good | Bad | Done
 
 type value = Value of int | Error
 
-let rec interpret (ast:ast_sl) (stdin:string) : string list =
-  (* for debug *)
+(* return output string *)
+let rec interpret (ast:ast_sl) (stdin:string) : string =
+  (* for debug
   let print_var_list mem_list =
     print_string "--- variable lists start ---\n";
     let rec aux m_list =
@@ -775,12 +776,20 @@ let rec interpret (ast:ast_sl) (stdin:string) : string list =
                             aux t
       in aux mem_list;
       print_string "--- variable lists end ---\n"; in
+  *)
   let convert_stdin str =
     split (regexp " \n\t") str in
+  let join_strlist lst =
+    let rec aux = function
+      | [] -> ""
+      | h :: t -> h ^ "\n" ^ aux t
+    in aux (rev lst) in
   let (_, mem, _, outp) =
     interpret_sl ast [] (convert_stdin stdin) [] in
+    (*
     print_var_list (rev mem);
-    outp
+    *)
+    join_strlist outp
 
 and interpret_sl (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
@@ -828,7 +837,9 @@ and interpret_read (id:string) (mem:memory) (input:string list) (output:string l
     print_string "no input in read";
     (Bad, mem, input, output)
   | h :: t ->
+    (*
     print_string ("read: int " ^ id ^ " = " ^ h ^ "\n");
+    *)
     try (Good, (id, (int_of_string h)) :: mem, t, output)
     with Failure "int_of_string" ->
       print_string "non-numeric input\n"; (Bad, mem, t, output)
@@ -838,8 +849,8 @@ and interpret_write (expr:ast_e) (mem:memory) (input:string list) (output:string
   let (ret, _) = interpret_expr expr mem in
   match ret with
   | Value (x) ->
-    print_int (x); print_string("\n");
-    (Good, mem, input, output)
+    (* print_int (x); print_string("\n"); *)
+    (Good, mem, input, (string_of_int x)::output)
   | Error     -> (Bad, mem, input, output)
 
 and interpret_if (expr:ast_e) (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
@@ -877,35 +888,35 @@ and interpret_expr (expr:ast_e) (mem:memory) : value * memory =
   | AST_num(n) -> (Value (int_of_string n), mem)
   | AST_id(id) -> (Value (find_val id mem), mem)
   | AST_binop(op, lhs, rhs) ->
-    let (Value (left), _) = interpret_expr lhs mem in
-    let (Value (right), _) = interpret_expr rhs mem in
-    match op with
-    | "+" -> (Value (left + right), mem)
-    | "-" -> (Value (left - right), mem)
-    | "*" -> (Value (left * right), mem)
-    | "/" ->
-      if right = 0 then begin
-        print_string ("divide by zero\n");
-        (Error, mem)
-      end
-      else (Value (left / right), mem)
-    | ">" -> if left > right then (Value (1), mem) else (Value (0), mem)
-    | "<" -> if left < right then (Value (1), mem) else (Value (0), mem)
-    | ">=" -> if left >= right then (Value (1), mem) else (Value (0), mem)
-    | "<=" -> if left <= right then (Value (1), mem) else (Value (0), mem)
-    | "==" -> if left = right then (Value (1), mem) else (Value (0), mem)
-    | "<>" -> if left <> right then (Value (1), mem) else (Value (0), mem)
-    | _   -> raise (Failure "interpret_expr: no such operator")
+    match interpret_expr lhs mem with
+    | (Error, _)        -> (Error, mem)
+    | (Value (left), _) ->
+      match interpret_expr rhs mem with
+      | (Error, _)        -> (Error, mem)
+      | (Value (right), _) ->
+        match op with
+        | "+" -> (Value (left + right), mem)
+        | "-" -> (Value (left - right), mem)
+        | "*" -> (Value (left * right), mem)
+        | "/" ->
+          if right = 0 then begin
+            print_string ("divide by zero\n");
+            (Error, mem)
+          end
+          else (Value (left / right), mem)
+        | ">" ->  if left >  right then (Value (1), mem) else (Value (0), mem)
+        | "<" ->  if left <  right then (Value (1), mem) else (Value (0), mem)
+        | ">=" -> if left >= right then (Value (1), mem) else (Value (0), mem)
+        | "<=" -> if left <= right then (Value (1), mem) else (Value (0), mem)
+        | "==" -> if left =  right then (Value (1), mem) else (Value (0), mem)
+        | "<>" -> if left <> right then (Value (1), mem) else (Value (0), mem)
+        | _   -> raise (Failure "interpret_expr: no such operator")
 
-let t4 = ast_ize_P(parse ecg_parse_table read_write_prog)
-let a = interpret t4 ""
-let t1 = ast_ize_P(parse ecg_parse_table sum_ave_prog)
-let c = interpret t1 ""
-let t3 = ast_ize_P(parse ecg_parse_table comp_f_prog)
-let d = interpret t3 ""
-let t5 = ast_ize_P(parse ecg_parse_table do_check_prog)
-let b = interpret t5 "10"
-let t2 = ast_ize_P(parse ecg_parse_table primes_prog)
-let e = interpret t2 "10"
-let t6 = ast_ize_P(parse ecg_parse_table divide_by_zero_prog)
-let f = interpret t6 ""
+(* test interpreter *)
+let () =
+  let t1 = ast_ize_P (parse ecg_parse_table do_check_prog) in
+  print_string (interpret t1 "10");
+  let t2 = ast_ize_P(parse ecg_parse_table primes_prog) in
+  print_string (interpret t2 "20");
+  let t3 = ast_ize_P(parse ecg_parse_table divide_by_zero_prog) in
+  print_string (interpret t3 "10");

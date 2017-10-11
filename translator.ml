@@ -448,6 +448,7 @@ let primes_prog = "
 let comp_f_prog = "sum := 1 + (2 * 3) write sum sum := sum - 1 write sum"
 let read_write_prog = "read a read b s := 1+2 write a+b+s"
 let do_check_prog = "read a do check a > 0 a := a - 1 write a od"
+let divide_by_zero_prog = "a := 1 b := 0 c := a / b"
 
 type parse_action = PA_error | PA_prediction of string list;;
 (* Double-index to find prediction (list of RHS symbols) for
@@ -760,6 +761,8 @@ type memory = (string * int) list
 *)
 type status = Good | Bad | Done
 
+type value = Value of int | Error
+
 let rec interpret (ast:ast_sl) (stdin:string) : string list =
   (* for debug *)
   let print_var_list mem_list =
@@ -813,7 +816,9 @@ and interpret_assign (id:string) (expr:ast_e) (mem:memory) (input:string list) (
   in
   let (result, _) = interpret_expr expr mem in
   let new_mem = drop_target id mem in
-  (Good, (id, result) :: new_mem, input, output)
+  match result with
+  | Value(r) -> (Good, (id, r) :: new_mem, input, output)
+  | Error -> (Bad, mem, input, output)
 
 (* add a (id, value) pair into memory if succeed *)
 and interpret_read (id:string) (mem:memory) (input:string list) (output:string list)
@@ -823,21 +828,27 @@ and interpret_read (id:string) (mem:memory) (input:string list) (output:string l
     print_string "no input in read";
     (Bad, mem, input, output)
   | h :: t ->
-    print_string ("read " ^ id ^ " " ^ h ^ "\n");
-    (Good, (id, (int_of_string h)) :: mem, t, output)
+    print_string ("read: int " ^ id ^ " = " ^ h ^ "\n");
+    try (Good, (id, (int_of_string h)) :: mem, t, output)
+    with Failure "int_of_string" ->
+      print_string "non-numeric input\n"; (Bad, mem, t, output)
 
 and interpret_write (expr:ast_e) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
   let (ret, _) = interpret_expr expr mem in
-  print_int (ret); print_string("\n");
-  (Good, mem, input, output)
+  match ret with
+  | Value (x) ->
+    print_int (x); print_string("\n");
+    (Good, mem, input, output)
+  | Error     -> (Bad, mem, input, output)
 
 and interpret_if (expr:ast_e) (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
   let (ret, _) = interpret_expr expr mem in
   match ret with
-  | 0 -> (Good, mem, input, output)
-  | _ -> interpret_sl sl mem input output
+  | Value (0) -> (Good, mem, input, output)
+  | Error     -> (Bad, mem, input, output)
+  | _         -> interpret_sl sl mem input output
 
 and interpret_do (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
@@ -851,33 +862,39 @@ and interpret_check (expr:ast_e) (mem:memory) (input:string list) (output:string
   : status * memory * string list * string list =
   let (ret, _) = interpret_expr expr mem in
   match ret with
-  | 0 -> (Done, mem, input, output)
+  | Value (0) -> (Done, mem, input, output)
+  | Error     -> (Bad, mem, input, output)
   | _ -> (Good, mem, input, output)
 
-and interpret_expr (expr:ast_e) (mem:memory) : int * memory =
+and interpret_expr (expr:ast_e) (mem:memory) : value * memory =
     (* return the value of id from the memory which is an integer *)
   let rec find_val id mem_list =
     match mem_list with
-    | [] -> raise (Failure "variable not yet declared")
+    | [] -> raise (Failure "use of an uninitialized variable")
     | (target, value) :: t ->
       if id = target then value else find_val id t in
   match expr with
-  | AST_num(n) -> (int_of_string n, mem)
-  | AST_id(id) -> (find_val id mem, mem)
+  | AST_num(n) -> (Value (int_of_string n), mem)
+  | AST_id(id) -> (Value (find_val id mem), mem)
   | AST_binop(op, lhs, rhs) ->
-    let (left, _) = interpret_expr lhs mem in
-    let (right, _) = interpret_expr rhs mem in
+    let (Value (left), _) = interpret_expr lhs mem in
+    let (Value (right), _) = interpret_expr rhs mem in
     match op with
-    | "+" -> (left + right, mem)
-    | "-" -> (left - right, mem)
-    | "*" -> (left * right, mem)
-    | "/" -> (left / right, mem)
-    | ">" -> if left > right then (1, mem) else (0, mem)
-    | "<" -> if left < right then (1, mem) else (0, mem)
-    | ">=" -> if left >= right then (1, mem) else (0, mem)
-    | "<=" -> if left <= right then (1, mem) else (0, mem)
-    | "==" -> if left = right then (1, mem) else (0, mem)
-    | "<>" -> if left <> right then (1, mem) else (0, mem)
+    | "+" -> (Value (left + right), mem)
+    | "-" -> (Value (left - right), mem)
+    | "*" -> (Value (left * right), mem)
+    | "/" ->
+      if right = 0 then begin
+        print_string ("divide by zero\n");
+        (Error, mem)
+      end
+      else (Value (left / right), mem)
+    | ">" -> if left > right then (Value (1), mem) else (Value (0), mem)
+    | "<" -> if left < right then (Value (1), mem) else (Value (0), mem)
+    | ">=" -> if left >= right then (Value (1), mem) else (Value (0), mem)
+    | "<=" -> if left <= right then (Value (1), mem) else (Value (0), mem)
+    | "==" -> if left = right then (Value (1), mem) else (Value (0), mem)
+    | "<>" -> if left <> right then (Value (1), mem) else (Value (0), mem)
     | _   -> raise (Failure "interpret_expr: no such operator")
 
 let t4 = ast_ize_P(parse ecg_parse_table read_write_prog)
@@ -890,3 +907,5 @@ let t5 = ast_ize_P(parse ecg_parse_table do_check_prog)
 let b = interpret t5 "10"
 let t2 = ast_ize_P(parse ecg_parse_table primes_prog)
 let e = interpret t2 "10"
+let t6 = ast_ize_P(parse ecg_parse_table divide_by_zero_prog)
+let f = interpret t6 ""

@@ -676,6 +676,13 @@ int getint() {
 void putint(int n) {
     printf(\"%d\\n\", n);
 }
+int zero_breaker(int n) {
+    if (n == 0) {
+        printf(\"Error: Divide by 0.\");
+        exit(0);
+    }
+    return n;
+}
 int main() {
 "
 
@@ -722,7 +729,7 @@ and translate_assign (id:string) (expr:ast_e) : string =
   id ^ " = " ^ (translate_expr expr) ^ ";\n"
 
 and translate_read (id:string) : string =
-  id ^ " = getint();\n"
+  id ^ " = getint();\n"  (* maybe we can pass a lineno to getint function. *)
 
 and translate_write (expr:ast_e) : string =
   "putint(" ^ translate_expr(expr) ^ ");\n"
@@ -741,7 +748,9 @@ and translate_expr (expr:ast_e) : string =
   | AST_num(n) -> n
   | AST_id(id) -> id
   | AST_binop(op, lhs, rhs) ->
-  "(" ^ translate_expr(lhs) ^ op ^ translate_expr(rhs) ^ ")"
+    if op = "/" then "(" ^ translate_expr(lhs) ^ op ^ "zero_breaker(" ^ translate_expr(rhs) ^ "))"
+    else "(" ^ translate_expr(lhs) ^ op ^ translate_expr(rhs) ^ ")"
+
 
 (* test cases *)
 let t1 = ast_ize_P(parse ecg_parse_table sum_ave_prog)
@@ -775,7 +784,7 @@ let rec interpret (ast:ast_sl) (stdin:string) : string =
   let print_var_list mem_list =
     print_string "--- variable lists start ---\n";
     let rec aux m_list =
-      match m_list with
+      match m_list then falsewith
       | [] -> ()
       | (id, value) :: t -> print_string (id); print_string (" ");
                             print_int (value); print_string ("\n");

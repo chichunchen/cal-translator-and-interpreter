@@ -3,11 +3,13 @@
 ### TODO
 - [X] AST
 - [X] translate to C
-    - [ ] unexpected end of input (attempt to read when there’s nothing there)
+    - [X] unexpected end of input (attempt to read when there’s nothing there)
     - [X] non-numeric input (the extended calculator language accepts only integers)
+    - [ ] "Warning: Assigned but never used" check
     - [ ] use of an uninitialized variable—one to which a value has not yet been assigned (read-ing counts as assignment). 
-    - [ ] divide by zero (C's automatically generated “floating exception” is not helpful:
-      you want something like “divide by zero at line 23”).
+    - [X] divide by zero (C's automatically generated “floating exception” is not helpful:
+      you want something like “divide by zero at line 23”). (Done, yet not know if this method violates the
+      "not taking advantage of imperative language features" rule.)
 - [X] interpret via ast
     - [ ] unexpected end of input (attempt to read when there’s nothing there)
     - [X] non-numeric input (the extended calculator language accepts only integers)

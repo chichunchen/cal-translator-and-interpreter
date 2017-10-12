@@ -13,6 +13,7 @@
     - [X] non-numeric input (the extended calculator language accepts only integers)
     - [X] use of an uninitialized variable—one to which a value has not yet been assigned (read-ing counts as assignment). 
     - [X] divide by zero
+    - [ ] Generate warning messages at the end of execution for any values that were assigned into a variable and then never used. (Extra credit of last year)
 
 
 ### Output sample

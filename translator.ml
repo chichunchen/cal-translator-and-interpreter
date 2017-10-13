@@ -28,10 +28,10 @@ open Str;;      (* for split *)
         ocamlc str.cma interpreter.ml
 *)
 
-#load "str.cma";;
-
 (* Surprisingly, compose isn't built in.  It's included in various
    widely used commercial packages, but not in the core libraries. *)
+#load "str.cma";;
+
 let compose f g x = f (g x);;
 
 type symbol_productions = (string * string list list);;
@@ -749,15 +749,16 @@ and translate_expr (expr:ast_e) : string =
 
 
 (* test cases *)
-let t1 = ast_ize_P(parse ecg_parse_table sum_ave_prog)
-let p1 = print_string (snd (translate t1))
-let t3 = ast_ize_P(parse ecg_parse_table comp_f_prog)
-let p3 = print_string (snd (translate t3))
-let t4 = ast_ize_P(parse ecg_parse_table read_write_prog)
-let p4 = print_string (snd (translate t4))
-let t2 = ast_ize_P(parse ecg_parse_table primes_prog)
-let p2 = print_string (snd (translate t2))
-let (warning, c_prog) = translate t2
+let translator () =
+  let t1 = ast_ize_P(parse ecg_parse_table sum_ave_prog) in
+  print_string (snd (translate t1));
+  let t3 = ast_ize_P(parse ecg_parse_table comp_f_prog) in
+  print_string (snd (translate t3));
+  let t4 = ast_ize_P(parse ecg_parse_table read_write_prog) in
+  print_string (snd (translate t4));
+  let t2 = ast_ize_P(parse ecg_parse_table primes_prog) in
+  let (warning, c_prog) = translate t2 in
+  print_string (c_prog);
 
 (*******************************************************************
     Interpret the program using AST directly
@@ -855,9 +856,11 @@ and interpret_read (id:string) (mem:memory) (input:string list) (output:string l
     (*
     print_string ("read: int " ^ id ^ " = " ^ h ^ "\n");
     *)
-    try (Good, (false, id, (int_of_string h)) :: mem, t, output)
-    with Failure "int_of_string" ->
-      print_string "non-numeric input\n"; (Bad, mem, t, output)
+    try let a = int_of_string h in
+      (Good, (false, id, a) :: mem, t, output)
+    with Failure _ ->
+    print_string "non-numeric input\n";
+    (Bad, mem, t, output)
 
 and interpret_write (expr:ast_e) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
@@ -935,7 +938,7 @@ and interpret_expr (expr:ast_e) (mem:memory) : value * memory =
         | _   -> raise (Failure "interpret_expr: no such operator")
 
 (* test interpreter *)
-let () =
+let interpreter () =
   let t1 = ast_ize_P (parse ecg_parse_table do_check_prog) in
   print_string (interpret t1 "10");
   let t2 = ast_ize_P(parse ecg_parse_table primes_prog) in

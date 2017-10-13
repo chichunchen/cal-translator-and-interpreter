@@ -627,7 +627,7 @@ and ast_ize_expr_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
         ast_ize_expr_tail (AST_binop ("/", lhs, ast_ize_expr f)) ft
   | PT_nt ("FT", [PT_nt ("mo", [PT_term "*"]); f; ft]) ->
         ast_ize_expr_tail (AST_binop ("*", lhs, ast_ize_expr f)) ft
-  | PT_nt ("TT", []) -> lhs
+  | PT_nt ("TT", [])
   | PT_nt ("FT", []) -> lhs
   | PT_nt ("TT", _) -> raise (Failure "TT doesn't work")
   | PT_nt ("FT", _) -> raise (Failure "FT doesn't work")
@@ -645,7 +645,7 @@ and ast_ize_expr_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
    indicating their names and the lines on which the writes occur.  Your
    C program should contain code to check for dynamic semantic errors. *)
 
-
+(* remove the duplicates in list using '=' *)
 let rec remove_duplicates list =
   match list with
   | [] -> []
@@ -654,6 +654,7 @@ let rec remove_duplicates list =
   if hd1 = hd2 then remove_duplicates (hd2 :: tl)
   else hd1 :: remove_duplicates (hd2 :: tl)
 
+(* the preface for output c *)
 let code_gen_preface =
 "
 #include <stdio.h>
@@ -684,6 +685,8 @@ int main() {
 
 let rec translate (ast:ast_sl)
   :  string * string =
+  (* collect all assigned variable (from AST_assign and AST_read)
+     and return the collected id list *)
   let rec traverse_variables (ast:ast_sl) : string list =
     match ast with
     | [] -> []
@@ -699,6 +702,7 @@ let rec translate (ast:ast_sl)
       | AST_check (expr)       -> traverse_variables t
       | AST_error              -> raise (Failure "traverse_variables error")
   in
+  (* concat all variable declarations *)
   let rec variables_string = function 
     [] -> ""
     | h::t -> "int " ^ h ^ ";\n" ^ variables_string t
@@ -775,7 +779,8 @@ type status = Good | Bad | Done
 
 type value = Value of int | Error
 
-(* return output string *)
+(* interpret with an ast tree and an input string. the value is delimited by using 
+   space to create a string list return output string *)
 let rec interpret (ast:ast_sl) (stdin:string) : string =
   (*
   let print_var_list mem_list =
@@ -831,7 +836,9 @@ and interpret_s (s:ast_s) (mem:memory) (inp:string list) (outp:string list)
 
 and interpret_assign (id:string) (expr:ast_e) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
-  let drop_some_from_mem (target:string) : memory =
+  (* drop the existed id from memory list, programmer should add back the updated mem
+     if using this function *)
+  let drop_target_from_mem (target:string) : memory =
     let rec aux target mem_list =
       match mem_list with
       | []                     -> []
@@ -840,7 +847,7 @@ and interpret_assign (id:string) (expr:ast_e) (mem:memory) (input:string list) (
       in aux target mem
   in
   let (result, _) = interpret_expr expr mem in
-  let new_mem = drop_some_from_mem id in
+  let new_mem = drop_target_from_mem id in
   match result with
   | Value(r) -> (Good, (false, id, r) :: new_mem, input, output)
   | Error    -> (Bad, mem, input, output)
@@ -853,22 +860,18 @@ and interpret_read (id:string) (mem:memory) (input:string list) (output:string l
     print_string "no input in read";
     (Bad, mem, input, output)
   | h :: t ->
-    (*
-    print_string ("read: int " ^ id ^ " = " ^ h ^ "\n");
-    *)
+    (* catch non-numeric and return the right status *)
     try let a = int_of_string h in
       (Good, (false, id, a) :: mem, t, output)
     with Failure _ ->
-    print_string "non-numeric input\n";
-    (Bad, mem, t, output)
+      print_string "non-numeric input\n";
+      (Bad, mem, t, output)
 
 and interpret_write (expr:ast_e) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
   let (ret, new_mem) = interpret_expr expr mem in
   match ret with
-  | Value (x) ->
-    (* print_int (x); print_string("\n"); *)
-    (Good, new_mem, input, (string_of_int x)::output)
+  | Value (x) -> (Good, new_mem, input, (string_of_int x)::output)
   | Error     -> (Bad, new_mem, input, output)
 
 and interpret_if (expr:ast_e) (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
@@ -913,11 +916,12 @@ and interpret_expr (expr:ast_e) (mem:memory) : value * memory =
   | AST_num(n) -> (Value (int_of_string n), mem)
   | AST_id(id) -> (Value (find_val id mem), (update_mem id mem))
   | AST_binop(op, lhs, rhs) ->
+    (* first match left and then right *)
     match interpret_expr lhs mem with
     | (Error, _)        -> (Error, mem)
     | (Value (left), _) ->
       match interpret_expr rhs mem with
-      | (Error, _)        -> (Error, mem)
+      | (Error, _)         -> (Error, mem)
       | (Value (right), _) ->
         match op with
         | "+" -> (Value (left + right), mem)

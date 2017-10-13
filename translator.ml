@@ -780,6 +780,7 @@ type value = Value of int | Error
 
 (* return output string *)
 let rec interpret (ast:ast_sl) (stdin:string) : string =
+  (*
   let print_var_list mem_list =
     print_string "--- variable lists start ---\n";
     let rec aux m_list =
@@ -793,8 +794,9 @@ let rec interpret (ast:ast_sl) (stdin:string) : string =
         aux t
       in aux mem_list;
       print_string "--- variable lists end ---\n"; in
+      *)
   let convert_stdin str =
-    split (regexp " \n\t") str in
+    split (regexp " ") str in
   let join_strlist lst =
     let rec aux = function
       | [] -> ""
@@ -803,7 +805,9 @@ let rec interpret (ast:ast_sl) (stdin:string) : string =
   let (_, mem, _, outp) =
     interpret_sl ast [] (convert_stdin stdin) [] in
 
+  (*
   print_var_list (rev mem);
+  *)
   join_strlist outp
 
 and interpret_sl (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
@@ -943,4 +947,4 @@ let () =
   let t3 = ast_ize_P(parse ecg_parse_table divide_by_zero_prog) in
   print_string (interpret t3 "10");
   let t4 = ast_ize_P(parse ecg_parse_table comp_f_prog) in
-  print_string (interpret t4 "")
+  print_string (interpret t4 "");;

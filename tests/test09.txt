@@ -1,0 +1,1 @@
+read a do check a > 0 write a a := a - 1 od

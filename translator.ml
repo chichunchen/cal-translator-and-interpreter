@@ -645,18 +645,14 @@ and ast_ize_expr_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
    indicating their names and the lines on which the writes occur.  Your
    C program should contain code to check for dynamic semantic errors. *)
 
-let remove_elt e l =
-  let rec go l acc = match l with
-  | [] -> rev acc
-  | x::xs when e = x -> go xs acc
-  | x::xs -> go xs (x::acc)
-  in go l []
 
-let remove_duplicates l =
-  let rec go l acc = match l with
-  | [] -> rev acc
-  | x :: xs -> go (remove_elt x xs) (x::acc)
-  in go l []
+let rec remove_duplicates list =
+  match list with
+  | [] -> []
+  | [hd] -> [hd]
+  | hd1 :: hd2 :: tl ->
+  if hd1 = hd2 then remove_duplicates (hd2 :: tl)
+  else hd1 :: remove_duplicates (hd2 :: tl)
 
 let code_gen_preface =
 "

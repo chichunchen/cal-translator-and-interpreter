@@ -767,7 +767,7 @@ let (warning, c_prog) = translate t2
     Interpret the program using AST directly
  *******************************************************************)
 
-type memory = (string * int) list
+type memory = (bool * string * int) list
 
 (*
     Good:  continue
@@ -780,18 +780,19 @@ type value = Value of int | Error
 
 (* return output string *)
 let rec interpret (ast:ast_sl) (stdin:string) : string =
-  (* for debug
   let print_var_list mem_list =
     print_string "--- variable lists start ---\n";
     let rec aux m_list =
-      match m_list then falsewith
+      match m_list with
       | [] -> ()
-      | (id, value) :: t -> print_string (id); print_string (" ");
-                            print_int (value); print_string ("\n");
-                            aux t
+      | (bo, id, value) :: t ->
+        if (bo = true) then print_string ("true ")
+        else print_string ("false ");
+        print_string (id); print_string (" ");
+        print_int (value); print_string ("\n");
+        aux t
       in aux mem_list;
       print_string "--- variable lists end ---\n"; in
-  *)
   let convert_stdin str =
     split (regexp " \n\t") str in
   let join_strlist lst =
@@ -801,10 +802,9 @@ let rec interpret (ast:ast_sl) (stdin:string) : string =
     in aux (rev lst) in
   let (_, mem, _, outp) =
     interpret_sl ast [] (convert_stdin stdin) [] in
-    (*
-    print_var_list (rev mem);
-    *)
-    join_strlist outp
+
+  print_var_list (rev mem);
+  join_strlist outp
 
 and interpret_sl (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
@@ -830,19 +830,19 @@ and interpret_s (s:ast_s) (mem:memory) (inp:string list) (outp:string list)
 
 and interpret_assign (id:string) (expr:ast_e) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
-  let drop_target target mem_list =
+  let drop_some_from_mem (target:string) : memory =
     let rec aux target mem_list =
       match mem_list with
-      | []     -> []
-      | h :: t -> if fst h = target then aux target t
-                  else h :: (aux target t)
-      in aux target mem_list
+      | []                     -> []
+      | ((_, id, _) as h) :: t -> if id = target then aux target t
+                                  else h :: (aux target t)
+      in aux target mem
   in
   let (result, _) = interpret_expr expr mem in
-  let new_mem = drop_target id mem in
+  let new_mem = drop_some_from_mem id in
   match result with
-  | Value(r) -> (Good, (id, r) :: new_mem, input, output)
-  | Error -> (Bad, mem, input, output)
+  | Value(r) -> (Good, (false, id, r) :: new_mem, input, output)
+  | Error    -> (Bad, mem, input, output)
 
 (* add a (id, value) pair into memory if succeed *)
 and interpret_read (id:string) (mem:memory) (input:string list) (output:string list)
@@ -855,25 +855,25 @@ and interpret_read (id:string) (mem:memory) (input:string list) (output:string l
     (*
     print_string ("read: int " ^ id ^ " = " ^ h ^ "\n");
     *)
-    try (Good, (id, (int_of_string h)) :: mem, t, output)
+    try (Good, (false, id, (int_of_string h)) :: mem, t, output)
     with Failure "int_of_string" ->
       print_string "non-numeric input\n"; (Bad, mem, t, output)
 
 and interpret_write (expr:ast_e) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
-  let (ret, _) = interpret_expr expr mem in
+  let (ret, new_mem) = interpret_expr expr mem in
   match ret with
   | Value (x) ->
     (* print_int (x); print_string("\n"); *)
-    (Good, mem, input, (string_of_int x)::output)
-  | Error     -> (Bad, mem, input, output)
+    (Good, new_mem, input, (string_of_int x)::output)
+  | Error     -> (Bad, new_mem, input, output)
 
 and interpret_if (expr:ast_e) (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
-  let (ret, _) = interpret_expr expr mem in
+  let (ret, new_mem) = interpret_expr expr mem in
   match ret with
-  | Value (0) -> (Good, mem, input, output)
-  | Error     -> (Bad, mem, input, output)
+  | Value (0) -> (Good, new_mem, input, output)
+  | Error     -> (Bad, new_mem, input, output)
   | _         -> interpret_sl sl mem input output
 
 and interpret_do (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
@@ -886,22 +886,29 @@ and interpret_do (sl:ast_sl) (mem:memory) (input:string list) (output:string lis
 
 and interpret_check (expr:ast_e) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
-  let (ret, _) = interpret_expr expr mem in
+  let (ret, new_mem) = interpret_expr expr mem in
   match ret with
-  | Value (0) -> (Done, mem, input, output)
-  | Error     -> (Bad, mem, input, output)
-  | _ -> (Good, mem, input, output)
+  | Value (0) -> (Done, new_mem, input, output)
+  | Error     -> (Bad, new_mem, input, output)
+  |         _ -> (Good, new_mem, input, output)
 
 and interpret_expr (expr:ast_e) (mem:memory) : value * memory =
-    (* return the value of id from the memory which is an integer *)
-  let rec find_val id mem_list =
+  (* return the value of id from the memory which is an integer *)
+  let rec find_val (id:string) (mem_list:memory) : int =
     match mem_list with
     | [] -> raise (Failure "use of an uninitialized variable")
-    | (target, value) :: t ->
+    | (_, target, value) :: t ->
       if id = target then value else find_val id t in
+  (* update the used id *)
+  let rec update_mem (id:string) (mem_list:memory) : memory =
+    match mem_list with
+    | [] -> []
+    | ((bo, target, value) as h) :: t ->
+      if id = target && bo = false then (true, target, value) :: (update_mem id t)
+      else h :: (update_mem id t) in
   match expr with
   | AST_num(n) -> (Value (int_of_string n), mem)
-  | AST_id(id) -> (Value (find_val id mem), mem)
+  | AST_id(id) -> (Value (find_val id mem), (update_mem id mem))
   | AST_binop(op, lhs, rhs) ->
     match interpret_expr lhs mem with
     | (Error, _)        -> (Error, mem)
@@ -932,6 +939,8 @@ let () =
   let t1 = ast_ize_P (parse ecg_parse_table do_check_prog) in
   print_string (interpret t1 "10");
   let t2 = ast_ize_P(parse ecg_parse_table primes_prog) in
-  print_string (interpret t2 "20");
+  print_string (interpret t2 "15");
   let t3 = ast_ize_P(parse ecg_parse_table divide_by_zero_prog) in
   print_string (interpret t3 "10");
+  let t4 = ast_ize_P(parse ecg_parse_table comp_f_prog) in
+  print_string (interpret t4 "")

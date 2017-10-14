@@ -418,7 +418,7 @@ let reduce_1_prod (astack:parse_tree list) (rhs_len:int) : parse_tree list =
    helper astack rhs_len [];;
 
 
-let sum_ave_prog = "read a read b sum := a + b write sum write sum / 2";;
+let sum_ave_prog = "read a read b read c sum := a + b write dsum write sum / 2";;
 let primes_prog = "
      read n
      cp := 2
@@ -686,20 +686,47 @@ int main() {
 let rec translate (ast:ast_sl)
   :  string * string =
   (* collect all assigned variable (from AST_assign and AST_read)
-     and return the collected id list *)
-  let rec traverse_variables (ast:ast_sl) : string list =
+   * and return the collected id list *)
+  let rec traverse_assigned_variables (ast:ast_sl) : string list =
     match ast with
     | [] -> []
     | h :: t ->
       match h with
-      | AST_assign (id, expr)  -> id::traverse_variables t
-      | AST_read (id)          -> id::traverse_variables t
+      | AST_assign (id, expr)  -> id::traverse_assigned_variables t 
+      | AST_read (id)          -> id::traverse_assigned_variables t
       | AST_do (sl)            ->
-          traverse_variables sl @ traverse_variables t
+          traverse_assigned_variables sl @ traverse_assigned_variables t
       | AST_if (expr, sl)      ->
-          traverse_variables sl @ traverse_variables t
+          traverse_assigned_variables sl @ traverse_assigned_variables t
       | AST_write (expr)       
-      | AST_check (expr)       -> traverse_variables t
+      | AST_check (expr)       -> traverse_assigned_variables t
+      | AST_error              -> raise (Failure "traverse_variables error")
+  in
+  (* collect all used variables (in expr), no matter it is assigned or not. *)
+  let rec traverse_used_variables (ast:ast_sl) : string list =
+    (* expr_vars collects all the variables in expr 
+     * if it matches id, then return [id] as a list
+     * if it matches num, then return [] because we only need variables
+     * if it matches binop, then recursively call it on both sides of the op.*)
+    let rec expr_vars (expr:ast_e) : string list = 
+      match expr with
+      | AST_id (id) -> [id]
+      | AST_num (n) -> []
+      | AST_binop (op, lhs, rhs) -> expr_vars lhs @ expr_vars rhs
+    in
+      
+    match ast with
+    | [] -> []
+    | h :: t ->
+      match h with
+      | AST_assign (id, expr)  -> expr_vars expr @ traverse_used_variables t
+      | AST_read (id)          -> traverse_used_variables t
+      | AST_do (sl)            ->
+          traverse_used_variables sl @ traverse_used_variables t
+      | AST_if (expr, sl)      ->
+          expr_vars expr @ traverse_used_variables sl @ traverse_used_variables t
+      | AST_write (expr)       
+      | AST_check (expr)       -> expr_vars expr @ traverse_used_variables t
       | AST_error              -> raise (Failure "traverse_variables error")
   in
   (* concat all variable declarations *)
@@ -707,8 +734,35 @@ let rec translate (ast:ast_sl)
     [] -> ""
     | h::t -> "int " ^ h ^ ";\n" ^ variables_string t
   in
-  let var_list = remove_duplicates(traverse_variables ast) in
-  ("", code_gen_preface ^ variables_string var_list ^ translate_sl ast ^ "return 0;\n}")
+
+  let var_list_assigned = remove_duplicates(traverse_assigned_variables ast) in
+  let var_list_used = remove_duplicates(traverse_used_variables ast) in
+  (* this is for Error: variable not assigned. *)
+  let assign_error used assigned = 
+    let not_assigned = List.filter (fun x -> not (List.mem x assigned)) used in
+    let rec n_assign l = 
+      match l with
+      | [] -> ""
+      | h::t -> "not assigned var: " ^ h ^ n_assign t
+    in
+    n_assign not_assigned
+  in
+  (* this is for Warning: assigned but never used. *)
+  let unused_warning used assigned = 
+    let not_used = List.filter (fun x -> not (List.mem x used)) assigned in
+    let rec n_use l = 
+      match l with
+      | [] -> ""
+      | h::t -> "not used var: " ^ h ^ n_use t
+    in
+    n_use not_used
+  in
+  (* always print warning; only raise error when there exists one. *)
+  let error_msg = assign_error var_list_used var_list_assigned in
+  let print_error = if error_msg = "" then "false" else "true" in
+  ("", code_gen_preface ^ "printf(\"" ^ unused_warning var_list_used var_list_assigned ^ "\");\n"
+  ^ "if (" ^ print_error ^ ") {\n    printf(\"" ^ error_msg ^ "\");\n    exit(0);\n}\n"
+  ^ variables_string var_list_assigned ^ translate_sl ast ^ "return 0;\n}")
 
 and translate_sl (ast:ast_sl) : string =
   match ast with

@@ -645,16 +645,15 @@ and ast_ize_expr_tail (lhs:ast_e) (tail:parse_tree) : ast_e =
    indicating their names and the lines on which the writes occur.  Your
    C program should contain code to check for dynamic semantic errors. *)
 
-(* remove the duplicates in list using '=' *)
-let rec remove_duplicates list =
-  match list with
-  | [] -> []
-  | [hd] -> [hd]
-  | hd1 :: hd2 :: tl ->
-  if hd1 = hd2 then remove_duplicates (hd2 :: tl)
-  else hd1 :: remove_duplicates (hd2 :: tl)
+(* Remove the duplicates in list using fold_left.
+ * The results are in reversed order, but O(1) space*)
+let cons_uniq xs x = if List.mem x xs then xs else x :: xs
+let remove_duplicates xs = List.fold_left cons_uniq [] xs
 
-(* the preface for output c *)
+(* The preface for output c. The getint function captures both errors 
+ * related to input. We take 'no input' as an input of '\n'. Also, we
+ * add a "zero_breaker" function to help implement detection of divide
+ * by zero error when translating expr.*)
 let code_gen_preface =
 "
 #include <stdio.h>
@@ -702,7 +701,7 @@ let rec translate (ast:ast_sl)
       | AST_check (expr)       -> traverse_assigned_variables t
       | AST_error              -> raise (Failure "traverse_variables error")
   in
-  (* collect all used variables (in expr), no matter it is assigned or not. *)
+  (* Collect all used variables (in expr), no matter it is assigned or not. *)
   let rec traverse_used_variables (ast:ast_sl) : string list =
     (* expr_vars collects all the variables in expr 
      * if it matches id, then return [id] as a list
@@ -729,7 +728,7 @@ let rec translate (ast:ast_sl)
       | AST_check (expr)       -> expr_vars expr @ traverse_used_variables t
       | AST_error              -> raise (Failure "traverse_variables error")
   in
-  (* concat all variable declarations *)
+  (* Concat all variable declarations *)
   let rec variables_string = function 
     [] -> ""
     | h::t -> "int " ^ h ^ ";\n" ^ variables_string t
@@ -737,7 +736,7 @@ let rec translate (ast:ast_sl)
 
   let var_list_assigned = remove_duplicates(traverse_assigned_variables ast) in
   let var_list_used = remove_duplicates(traverse_used_variables ast) in
-  (* this is for Error: variable not assigned. *)
+  (* This is for Error: variable not assigned. *)
   let assign_error used assigned = 
     let not_assigned = List.filter (fun x -> not (List.mem x assigned)) used in
     let rec n_assign l = 
@@ -747,7 +746,7 @@ let rec translate (ast:ast_sl)
     in
     n_assign not_assigned
   in
-  (* this is for Warning: assigned but never used. *)
+  (* This is for Warning: assigned but never used. *)
   let unused_warning used assigned = 
     let not_used = List.filter (fun x -> not (List.mem x used)) assigned in
     let rec n_use l = 
@@ -757,7 +756,7 @@ let rec translate (ast:ast_sl)
     in
     n_use not_used
   in
-  (* always print warning; only raise error when there exists one. *)
+  (* Always print warning; only raise error when there exists one. *)
   let error_msg = assign_error var_list_used var_list_assigned in
   let print_error = if error_msg = "" then "false" else "true" in
   ("", code_gen_preface ^ "printf(\"" ^ unused_warning var_list_used var_list_assigned ^ "\");\n"
@@ -797,6 +796,7 @@ and translate_do (ast:ast_sl) : string =
 and translate_check (expr:ast_e) : string =
   "if (!" ^ translate_expr(expr) ^ ") break;\n"
 
+(* Wrap the divisor with zero_breaker, because "if" conditions are hard to implement here. *)
 and translate_expr (expr:ast_e) : string =
   match expr with
   | AST_num(n) -> n

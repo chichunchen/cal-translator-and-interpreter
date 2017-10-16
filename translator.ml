@@ -418,7 +418,7 @@ let reduce_1_prod (astack:parse_tree list) (rhs_len:int) : parse_tree list =
    helper astack rhs_len [];;
 
 
-let sum_ave_prog = "read a read b read c sum := a + b write dsum write sum / 2";;
+let sum_ave_prog = "read a read b read c d := 2 sum := a + b write dsum write sum / 2";;
 let primes_prog = "
      read n
      cp := 2
@@ -742,7 +742,7 @@ let rec translate (ast:ast_sl)
     let rec n_assign l = 
       match l with
       | [] -> ""
-      | h::t -> "not assigned var: " ^ h ^ n_assign t
+      | h::t -> "not assigned var: " ^ h ^ "\\n" ^ n_assign t
     in
     n_assign not_assigned
   in
@@ -752,15 +752,15 @@ let rec translate (ast:ast_sl)
     let rec n_use l = 
       match l with
       | [] -> ""
-      | h::t -> "not used var: " ^ h ^ n_use t
+      | h::t -> "not used var: " ^ h ^ "\n" ^ n_use t
     in
     n_use not_used
   in
   (* Always print warning; only raise error when there exists one. *)
   let error_msg = assign_error var_list_used var_list_assigned in
   let print_error = if error_msg = "" then "false" else "true" in
-  ("", code_gen_preface ^ "printf(\"" ^ unused_warning var_list_used var_list_assigned ^ "\");\n"
-  ^ "if (" ^ print_error ^ ") {\n    printf(\"" ^ error_msg ^ "\");\n    exit(0);\n}\n"
+  let warning_msg = unused_warning var_list_used var_list_assigned in
+  (warning_msg, code_gen_preface ^ "if (" ^ print_error ^ ") {\n    printf(\"" ^ error_msg ^ "\");\n    exit(0);\n}\n"
   ^ variables_string var_list_assigned ^ translate_sl ast ^ "return 0;\n}")
 
 and translate_sl (ast:ast_sl) : string =
@@ -807,16 +807,16 @@ and translate_expr (expr:ast_e) : string =
 
 
 (* test cases *)
-let translator () =
+let translator() =
   let t1 = ast_ize_P(parse ecg_parse_table sum_ave_prog) in
-  print_string (snd (translate t1));
+  let (warning, c_prog) = translate t1 in
+  print_string (warning ^ c_prog);
   let t3 = ast_ize_P(parse ecg_parse_table comp_f_prog) in
   print_string (snd (translate t3));
   let t4 = ast_ize_P(parse ecg_parse_table read_write_prog) in
   print_string (snd (translate t4));
-  let t2 = ast_ize_P(parse ecg_parse_table primes_prog) in
-  let (warning, c_prog) = translate t2 in
-  print_string (c_prog);
+  let (warning, c_prog) = translate t1 in
+  print_string (warning );
 
 (*******************************************************************
     Interpret the program using AST directly

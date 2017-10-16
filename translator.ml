@@ -934,7 +934,7 @@ and interpret_if (expr:ast_e) (sl:ast_sl) (mem:memory) (input:string list) (outp
   match ret with
   | Value (0) -> (Good, new_mem, input, output)
   | Error     -> (Bad, new_mem, input, output)
-  | _         -> interpret_sl sl mem input output
+  | _         -> interpret_sl sl new_mem input output
 
 and interpret_do (sl:ast_sl) (mem:memory) (input:string list) (output:string list)
   : status * memory * string list * string list =
@@ -950,7 +950,7 @@ and interpret_check (expr:ast_e) (mem:memory) (input:string list) (output:string
   match ret with
   | Value (0) -> (Done, new_mem, input, output)
   | Error     -> (Bad, new_mem, input, output)
-  |         _ -> (Good, new_mem, input, output)
+  | _         -> (Good, new_mem, input, output)
 
 and interpret_expr (expr:ast_e) (mem:memory) : value * memory =
   (* return the value of id from the memory which is an integer *)

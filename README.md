@@ -1,4 +1,4 @@
-# A3 Translator
+# cal-translator-and-interpreter
 Transate a Fortan-like language to AST and interpret the AST with a REPL (Read Evaluate Print Loop). In addition, it supports several run-time analysis for the interpreter.
 
 ## What has done
